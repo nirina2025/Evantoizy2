@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, getDocs, where, orderBy } from 'firebase/firestore';
-import { db, auth } from '../lib/firebase';
+import { db } from '../lib/firebase';
 import { DashboardStats, Transaction } from '../types';
-import { TrendingUp, Package, DollarSign, Users, Calendar, BarChart3, Monitor, Image, Video } from 'lucide-react';
+import { TrendingUp, Package, DollarSign, Users, Calendar, BarChart3 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 interface DashboardProps {
@@ -19,7 +19,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ userRole }) => {
     todaysSales: 0,
     monthlyRevenue: 0
   });
-  const [platformStats, setPlatformStats] = useState<{[key: string]: any}>({});
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -28,20 +27,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ userRole }) => {
   }, []);
 
   const loadDashboardData = async () => {
-    if (!db || !auth.currentUser) return;
+    if (!db) return;
 
     try {
       // Charger les statistiques des codes
       const codesQuery = query(collection(db, 'rechargeCodes'));
       const codesSnapshot = await getDocs(codesQuery);
-      const codes = codesSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        purchaseDate: doc.data().purchaseDate?.toDate() || new Date(),
-        saleDate: doc.data().saleDate?.toDate(),
-        createdAt: doc.data().createdAt?.toDate() || new Date(),
-        updatedAt: doc.data().updatedAt?.toDate() || new Date()
-      }));
+      const codes = codesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
       const totalCodes = codes.length;
       const availableCodes = codes.filter(code => code.status === 'available').length;
@@ -74,28 +66,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ userRole }) => {
         .filter(t => t.saleDate >= firstDayOfMonth)
         .reduce((sum, t) => sum + t.salePrice, 0);
 
-      // Calculer les statistiques par plateforme
-      const platforms = ['Envato', 'Motionarray', 'Freepik'];
-      const platformData: {[key: string]: any} = {};
-      
-      platforms.forEach(platform => {
-        const platformCodes = codes.filter(code => code.platform === platform);
-        const platformTransactions = transactions.filter(t => t.platform === platform);
-        
-        platformData[platform] = {
-          totalCodes: platformCodes.length,
-          availableCodes: platformCodes.filter(code => code.status === 'available').length,
-          soldCodes: platformCodes.filter(code => code.status === 'sold').length,
-          totalRevenue: platformTransactions.reduce((sum, t) => sum + t.salePrice, 0),
-          totalProfit: platformTransactions.reduce((sum, t) => sum + t.profit, 0),
-          monthlyRevenue: platformTransactions
-            .filter(t => t.saleDate >= firstDayOfMonth)
-            .reduce((sum, t) => sum + t.salePrice, 0)
-        };
-      });
-      
-      setPlatformStats(platformData);
-
       setStats({
         totalCodes,
         availableCodes,
@@ -117,24 +87,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ userRole }) => {
     { name: 'Vendus', value: stats.soldCodes, color: '#3B82F6' },
     { name: 'Expirés', value: stats.totalCodes - stats.availableCodes - stats.soldCodes, color: '#EF4444' }
   ];
-
-  const getPlatformIcon = (platform: string) => {
-    switch (platform) {
-      case 'Envato': return Monitor;
-      case 'Freepik': return Image;
-      case 'Motionarray': return Video;
-      default: return Package;
-    }
-  };
-
-  const getPlatformColor = (platform: string) => {
-    switch (platform) {
-      case 'Envato': return 'from-green-500 to-emerald-600';
-      case 'Freepik': return 'from-blue-500 to-cyan-600';
-      case 'Motionarray': return 'from-purple-500 to-violet-600';
-      default: return 'from-gray-500 to-gray-600';
-    }
-  };
 
   if (loading) {
     return (
@@ -205,62 +157,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ userRole }) => {
               <BarChart3 className="h-6 w-6 text-purple-600" />
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Statistiques par plateforme */}
-      <div className="space-y-6">
-        <h2 className="text-2xl font-bold text-gray-900">Statistiques par plateforme</h2>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {Object.entries(platformStats).map(([platform, data]) => {
-            const Icon = getPlatformIcon(platform);
-            const colorClass = getPlatformColor(platform);
-            
-            return (
-              <div key={platform} className="bg-white rounded-xl shadow-sm border overflow-hidden">
-                <div className={`bg-gradient-to-r ${colorClass} p-4`}>
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
-                      <Icon className="h-6 w-6 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-bold text-white">{platform}</h3>
-                      <p className="text-white/80 text-sm">Plateforme créative</p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="p-6 space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-gray-900">{data.totalCodes}</p>
-                      <p className="text-sm text-gray-600">Total codes</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-green-600">{data.availableCodes}</p>
-                      <p className="text-sm text-gray-600">Disponibles</p>
-                    </div>
-                  </div>
-                  
-                  <div className="border-t pt-4">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-sm text-gray-600">Chiffre d'affaires</span>
-                      <span className="font-semibold text-blue-600">{data.totalRevenue.toLocaleString()} Ar</span>
-                    </div>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-sm text-gray-600">Bénéfices</span>
-                      <span className="font-semibold text-purple-600">{data.totalProfit.toLocaleString()} Ar</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Ce mois</span>
-                      <span className="font-semibold text-green-600">{data.monthlyRevenue.toLocaleString()} Ar</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
         </div>
       </div>
 

@@ -1,7 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
-import { getAnalytics } from 'firebase/analytics';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
@@ -12,41 +11,18 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID || ""
 };
 
-// Vérifier si toutes les variables d'environnement sont définies
-const isConfigValid = firebaseConfig.apiKey && 
-                     firebaseConfig.authDomain && 
-                     firebaseConfig.projectId && 
-                     firebaseConfig.storageBucket && 
-                     firebaseConfig.messagingSenderId && 
-                     firebaseConfig.appId;
-
 let app;
 let auth;
 let db;
-let analytics;
 
-if (isConfigValid) {
-  try {
-    app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
-    db = getFirestore(app);
-    // Analytics uniquement en production
-    if (typeof window !== 'undefined') {
-      analytics = getAnalytics(app);
-    }
-    console.log('Firebase initialisé avec succès');
-  } catch (error) {
-    console.error('Erreur lors de l\'initialisation de Firebase:', error);
-    auth = null as any;
-    db = null as any;
-    analytics = null;
-  }
+if (firebaseConfig.apiKey && firebaseConfig.projectId) {
+  app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);
 } else {
-  console.warn('Configuration Firebase incomplète. Veuillez vérifier vos variables d\'environnement.');
   auth = null as any;
   db = null as any;
-  analytics = null;
 }
 
-export { auth, db, analytics };
+export { auth, db };
 export default app;

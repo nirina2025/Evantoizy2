@@ -25,15 +25,9 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ user }) 
   }, [transactions, searchTerm, dateFilter, platformFilter]);
 
   const loadTransactions = async () => {
-    if (!db) {
-      console.warn('Firebase non configuré - chargement des transactions impossible');
-      setLoading(false);
-      return;
-    }
+    if (!db) return;
 
     try {
-      console.log('Chargement des transactions pour:', user.role, user.id);
-
       let q;
       if (user.role === 'admin') {
         q = query(collection(db, 'transactions'), orderBy('createdAt', 'desc'));
@@ -46,28 +40,13 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ user }) 
       }
 
       const querySnapshot = await getDocs(q);
-      console.log('Nombre de transactions récupérées:', querySnapshot.size);
+      const transactionsData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        saleDate: doc.data().saleDate?.toDate() || new Date(),
+        createdAt: doc.data().createdAt?.toDate() || new Date()
+      })) as Transaction[];
 
-      const transactionsData = querySnapshot.docs.map(doc => {
-        const data = doc.data();
-
-        return {
-          id: doc.id,
-          codeId: data.codeId || '',
-          code: data.code || '',
-          type: data.type || '1-month',
-          platform: data.platform || '',
-          denomination: data.denomination || 0,
-          salePrice: data.salePrice || 0,
-          profit: data.profit || 0,
-          soldBy: data.soldBy || '',
-          soldTo: data.soldTo || '',
-          saleDate: data.saleDate?.toDate ? data.saleDate.toDate() : (data.saleDate || new Date()),
-          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt || new Date())
-        } as Transaction;
-      });
-
-      console.log('Transactions traitées:', transactionsData.length);
       setTransactions(transactionsData);
     } catch (error) {
       console.error('Erreur lors du chargement des transactions:', error);

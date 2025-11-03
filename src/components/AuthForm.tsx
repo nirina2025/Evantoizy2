@@ -1,16 +1,12 @@
 import React, { useState } from 'react';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
-import { auth, db } from '../lib/firebase';
-import { Eye, EyeOff, Mail, Lock, User, CreditCard } from 'lucide-react';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '../lib/firebase';
+import { Eye, EyeOff, Mail, Lock, CreditCard } from 'lucide-react';
 
 export const AuthForm: React.FC = () => {
-  const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({
     email: '',
-    password: '',
-    name: '',
-    role: 'vendor' as 'admin' | 'vendor'
+    password: ''
   });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -18,8 +14,8 @@ export const AuthForm: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!auth || !db) {
-      setError('Configuration Firebase manquante. Veuillez configurer vos variables d\'environnement Firebase.');
+    if (!auth) {
+      setError('Service d\'authentification non disponible');
       return;
     }
 
@@ -27,41 +23,9 @@ export const AuthForm: React.FC = () => {
     setError('');
 
     try {
-      if (isLogin) {
-        await signInWithEmailAndPassword(auth, formData.email, formData.password);
-      } else {
-        const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
-        await setDoc(doc(db, 'users', userCredential.user.uid), {
-          name: formData.name,
-          email: formData.email,
-          role: formData.role,
-          createdAt: new Date()
-        });
-      }
+      await signInWithEmailAndPassword(auth, formData.email, formData.password);
     } catch (err: any) {
-      let errorMessage = 'Une erreur est survenue';
-      
-      switch (err.code) {
-        case 'auth/user-not-found':
-          errorMessage = 'Aucun compte trouvé avec cet email';
-          break;
-        case 'auth/wrong-password':
-          errorMessage = 'Mot de passe incorrect';
-          break;
-        case 'auth/email-already-in-use':
-          errorMessage = 'Un compte existe déjà avec cet email';
-          break;
-        case 'auth/weak-password':
-          errorMessage = 'Le mot de passe doit contenir au moins 6 caractères';
-          break;
-        case 'auth/invalid-email':
-          errorMessage = 'Format d\'email invalide';
-          break;
-        default:
-          errorMessage = err.message;
-      }
-      
-      setError(errorMessage);
+      setError('Email ou mot de passe incorrect');
     } finally {
       setLoading(false);
     }
@@ -80,50 +44,11 @@ export const AuthForm: React.FC = () => {
 
         <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-2xl p-8 border border-white/20">
           <div className="text-center mb-8">
-            <h2 className="text-2xl font-bold text-white">
-              {isLogin ? 'Connexion' : 'Inscription'}
-            </h2>
-            <p className="text-blue-200 mt-2">
-              {isLogin ? 'Accédez à votre compte' : 'Créez votre compte'}
-            </p>
+            <h2 className="text-2xl font-bold text-white">Connexion</h2>
+            <p className="text-blue-200 mt-2">Accédez à votre compte</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            {!isLogin && (
-              <>
-                <div>
-                  <label className="block text-sm font-medium text-white mb-2">
-                    Nom complet
-                  </label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-blue-300 h-5 w-5" />
-                    <input
-                      type="text"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-white placeholder-blue-200"
-                      placeholder="Votre nom complet"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-white mb-2">
-                    Rôle
-                  </label>
-                  <select
-                    value={formData.role}
-                    onChange={(e) => setFormData({ ...formData, role: e.target.value as 'admin' | 'vendor' })}
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-white"
-                  >
-                    <option value="vendor" className="text-gray-900">Vendeur</option>
-                    <option value="admin" className="text-gray-900">Administrateur</option>
-                  </select>
-                </div>
-              </>
-            )}
-
             <div>
               <label className="block text-sm font-medium text-white mb-2">
                 Email
@@ -176,18 +101,9 @@ export const AuthForm: React.FC = () => {
               disabled={loading}
               className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 px-4 rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Chargement...' : (isLogin ? 'Se connecter' : "S'inscrire")}
+              {loading ? 'Connexion...' : 'Se connecter'}
             </button>
           </form>
-
-          <div className="mt-6 text-center">
-            <button
-              onClick={() => setIsLogin(!isLogin)}
-              className="text-blue-300 hover:text-white font-medium"
-            >
-              {isLogin ? "Pas de compte ? S'inscrire" : 'Déjà un compte ? Se connecter'}
-            </button>
-          </div>
         </div>
       </div>
     </div>

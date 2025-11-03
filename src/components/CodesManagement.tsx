@@ -14,25 +14,14 @@ export const CodesManagement: React.FC<CodesManagementProps> = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
-  const [showImportSingleModal, setShowImportSingleModal] = useState(false);
   const [editingCode, setEditingCode] = useState<RechargeCode | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
-  const [platformFilter, setPlatformFilter] = useState('all');
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importPreview, setImportPreview] = useState<any[]>([]);
   const [importLoading, setImportLoading] = useState(false);
   const [importErrors, setImportErrors] = useState<string[]>([]);
-
-  const [importSingleData, setImportSingleData] = useState({
-    code: '',
-    type: '1-month' as '1-month' | '3-months',
-    platform: '',
-    purchasePrice: 0,
-    salePrice: 0,
-    purchaseDate: new Date().toISOString().split('T')[0]
-  });
 
   const [formData, setFormData] = useState({
     code: '',
@@ -44,7 +33,7 @@ export const CodesManagement: React.FC<CodesManagementProps> = ({ user }) => {
     purchaseDate: new Date().toISOString().split('T')[0]
   });
 
-  const platforms = ['Envato', 'Motionarray', 'Freepik'];
+  const platforms = ['Envato', 'Freepik', 'Motionarray'];
   const codeTypes = [
     { value: '1-month', label: '1 mois' },
     { value: '3-months', label: '3 mois' }
@@ -56,7 +45,7 @@ export const CodesManagement: React.FC<CodesManagementProps> = ({ user }) => {
 
   useEffect(() => {
     filterCodes();
-  }, [codes, searchTerm, statusFilter, typeFilter, platformFilter]);
+  }, [codes, searchTerm, statusFilter, typeFilter]);
 
   const loadCodes = async () => {
     if (!db) return;
@@ -96,10 +85,6 @@ export const CodesManagement: React.FC<CodesManagementProps> = ({ user }) => {
 
     if (typeFilter !== 'all') {
       filtered = filtered.filter(code => code.type === typeFilter);
-    }
-
-    if (platformFilter !== 'all') {
-      filtered = filtered.filter(code => code.platform === platformFilter);
     }
 
     setFilteredCodes(filtered);
@@ -145,37 +130,6 @@ export const CodesManagement: React.FC<CodesManagementProps> = ({ user }) => {
     }
   };
 
-  const handleImportSingle = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!db) return;
-
-    try {
-      const codeData = {
-        ...importSingleData,
-        denomination: 0, // Valeur par défaut
-        purchaseDate: new Date(importSingleData.purchaseDate),
-        status: 'available' as const,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-
-      await addDoc(collection(db, 'rechargeCodes'), codeData);
-
-      setImportSingleData({
-        code: '',
-        type: '1-month',
-        platform: '',
-        purchasePrice: 0,
-        salePrice: 0,
-        purchaseDate: new Date().toISOString().split('T')[0]
-      });
-      setShowImportSingleModal(false);
-      loadCodes();
-    } catch (error) {
-      console.error('Erreur lors de l\'importation:', error);
-    }
-  };
-
   const handleSellCode = async (code: RechargeCode, customerName: string) => {
     if (!db) return;
 
@@ -211,7 +165,7 @@ export const CodesManagement: React.FC<CodesManagementProps> = ({ user }) => {
   };
 
   const deleteCode = async (codeId: string) => {
-    if (!db) return;
+    if (!db || user.role !== 'admin') return;
 
     try {
       await deleteDoc(doc(db, 'rechargeCodes', codeId));
@@ -256,7 +210,7 @@ export const CodesManagement: React.FC<CodesManagementProps> = ({ user }) => {
       }
 
       const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-      const expectedHeaders = ['code', 'type', 'platform', 'purchaseprice', 'saleprice', 'purchasedate'];
+      const expectedHeaders = ['code', 'type', 'platform', 'denomination', 'purchaseprice', 'saleprice', 'purchasedate'];
       
       const missingHeaders = expectedHeaders.filter(h => !headers.includes(h));
       if (missingHeaders.length > 0) {
@@ -291,15 +245,16 @@ export const CodesManagement: React.FC<CodesManagementProps> = ({ user }) => {
         }
 
         if (!platforms.includes(row.platform)) {
-          errors.push(`Ligne ${i + 1}: Plateforme invalide (doit être "Envato", "Motionarray" ou "Freepik")`);
+          errors.push(`Ligne ${i + 1}: Plateforme invalide (doit être "Envato", "Freepik" ou "Motionarray")`);
           continue;
         }
 
         // Conversion des nombres
+        row.denomination = parseFloat(row.denomination);
         row.purchaseprice = parseFloat(row.purchaseprice);
         row.saleprice = parseFloat(row.saleprice);
 
-        if (isNaN(row.purchaseprice) || isNaN(row.saleprice)) {
+        if (isNaN(row.denomination) || isNaN(row.purchaseprice) || isNaN(row.saleprice)) {
           errors.push(`Ligne ${i + 1}: Valeurs numériques invalides`);
           continue;
         }
@@ -315,7 +270,7 @@ export const CodesManagement: React.FC<CodesManagementProps> = ({ user }) => {
           code: row.code,
           type: row.type,
           platform: row.platform,
-          denomination: 0, // Valeur par défaut
+          denomination: row.denomination,
           purchasePrice: row.purchaseprice,
           salePrice: row.saleprice,
           purchaseDate: row.purchasedate
@@ -365,8 +320,8 @@ export const CodesManagement: React.FC<CodesManagementProps> = ({ user }) => {
   };
 
   const downloadTemplate = () => {
-    const headers = ['code', 'type', 'platform', 'purchaseprice', 'saleprice', 'purchasedate'];
-    const example = ['ABC123', '1-month', 'Envato', '45000', '55000', '2024-01-15'];
+    const headers = ['code', 'type', 'platform', 'denomination', 'purchaseprice', 'saleprice', 'purchasedate'];
+    const example = ['ABC123', '1-month', 'Envato', '50000', '45000', '55000', '2024-01-15'];
     const csvContent = [headers.join(','), example.join(',')].join('\n');
     
     const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -393,22 +348,15 @@ export const CodesManagement: React.FC<CodesManagementProps> = ({ user }) => {
           <h1 className="text-3xl font-bold text-gray-900">Gestion des codes</h1>
           <p className="text-gray-600 mt-1">Gérez votre stock de codes d'abonnement</p>
         </div>
-        <div className="flex space-x-3">
-          <button
-            onClick={() => setShowImportSingleModal(true)}
-            className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-lg font-medium hover:from-purple-700 hover:to-pink-700 transition-all flex items-center space-x-2"
-          >
-            <Plus className="h-5 w-5" />
-            <span>Importer un code</span>
-          </button>
-          <button
-            onClick={() => setShowImportModal(true)}
-            className="bg-gradient-to-r from-green-600 to-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:from-green-700 hover:to-blue-700 transition-all flex items-center space-x-2"
-          >
-            <Upload className="h-5 w-5" />
-            <span>Importer par lot</span>
-          </button>
-          {user.role === 'admin' && (
+        {user.role === 'admin' && (
+          <div className="flex space-x-3">
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="bg-gradient-to-r from-green-600 to-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:from-green-700 hover:to-blue-700 transition-all flex items-center space-x-2"
+            >
+              <Upload className="h-5 w-5" />
+              <span>Import en lot</span>
+            </button>
             <button
               onClick={() => setShowForm(true)}
               className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-lg font-medium hover:from-blue-700 hover:to-purple-700 transition-all flex items-center space-x-2"
@@ -416,162 +364,16 @@ export const CodesManagement: React.FC<CodesManagementProps> = ({ user }) => {
               <Plus className="h-5 w-5" />
               <span>Ajouter un code</span>
             </button>
-          )}
-        </div>
-      </div>
-
-      {/* Modal d'importation unitaire */}
-      {showImportSingleModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold">Importer un code</h2>
-              <button
-                onClick={() => {
-                  setShowImportSingleModal(false);
-                  setImportSingleData({
-                    code: '',
-                    type: '1-month',
-                    platform: '',
-                    denomination: 0,
-                    purchasePrice: 0,
-                    salePrice: 0,
-                    purchaseDate: new Date().toISOString().split('T')[0]
-                  });
-                }}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleImportSingle} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Code d'abonnement
-                </label>
-                <input
-                  type="text"
-                  value={importSingleData.code}
-                  onChange={(e) => setImportSingleData({ ...importSingleData, code: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Entrez le code existant"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Durée
-                </label>
-                <select
-                  value={importSingleData.type}
-                  onChange={(e) => setImportSingleData({ ...importSingleData, type: e.target.value as '1-month' | '3-months' })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  required
-                >
-                  {codeTypes.map(type => (
-                    <option key={type.value} value={type.value}>{type.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Plateforme
-                </label>
-                <select
-                  value={importSingleData.platform}
-                  onChange={(e) => setImportSingleData({ ...importSingleData, platform: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  required
-                >
-                  <option value="">Sélectionner une plateforme</option>
-                  {platforms.map(platform => (
-                    <option key={platform} value={platform}>{platform}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Prix d'achat (Ar)
-                </label>
-                <input
-                  type="number"
-                  value={importSingleData.purchasePrice}
-                  onChange={(e) => setImportSingleData({ ...importSingleData, purchasePrice: parseFloat(e.target.value) })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  required
-                  min="0"
-                  step="1"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Prix de vente (Ar)
-                </label>
-                <input
-                  type="number"
-                  value={importSingleData.salePrice}
-                  onChange={(e) => setImportSingleData({ ...importSingleData, salePrice: parseFloat(e.target.value) })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  required
-                  min="0"
-                  step="1"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Date d'achat
-                </label>
-                <input
-                  type="date"
-                  value={importSingleData.purchaseDate}
-                  onChange={(e) => setImportSingleData({ ...importSingleData, purchaseDate: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  required
-                />
-              </div>
-
-              <div className="flex space-x-3 pt-4">
-                <button
-                  type="submit"
-                  className="flex-1 bg-purple-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-purple-700 transition-colors"
-                >
-                  Importer
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowImportSingleModal(false);
-                    setImportSingleData({
-                      code: '',
-                      type: '1-month',
-                      platform: '',
-                      purchasePrice: 0,
-                      salePrice: 0,
-                      purchaseDate: new Date().toISOString().split('T')[0]
-                    });
-                  }}
-                  className="flex-1 bg-gray-300 text-gray-700 py-3 px-4 rounded-lg font-medium hover:bg-gray-400 transition-colors"
-                >
-                  Annuler
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Modal d'import en lot */}
       {showImportModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold">Importer par lot</h2>
+              <h2 className="text-2xl font-bold">Import en lot</h2>
               <button
                 onClick={() => {
                   setShowImportModal(false);
@@ -591,9 +393,9 @@ export const CodesManagement: React.FC<CodesManagementProps> = ({ user }) => {
                 <h3 className="font-semibold text-blue-900 mb-2">Instructions d'import</h3>
                 <ul className="text-sm text-blue-800 space-y-1">
                   <li>• Le fichier doit être au format CSV</li>
-                  <li>• Colonnes requises: code, type, platform, purchaseprice, saleprice, purchasedate</li>
+                  <li>• Colonnes requises: code, type, platform, denomination, purchaseprice, saleprice, purchasedate</li>
                   <li>• Type: "1-month" ou "3-months"</li>
-                  <li>• Platform: "Envato", "Motionarray" ou "Freepik"</li>
+                  <li>• Platform: "Envato", "Freepik" ou "Motionarray"</li>
                   <li>• Date au format: YYYY-MM-DD</li>
                 </ul>
                 <button
@@ -647,6 +449,7 @@ export const CodesManagement: React.FC<CodesManagementProps> = ({ user }) => {
                             <th className="px-3 py-2 text-left">Code</th>
                             <th className="px-3 py-2 text-left">Durée</th>
                             <th className="px-3 py-2 text-left">Plateforme</th>
+                            <th className="px-3 py-2 text-left">Valeur</th>
                             <th className="px-3 py-2 text-left">Prix achat</th>
                             <th className="px-3 py-2 text-left">Prix vente</th>
                             <th className="px-3 py-2 text-left">Date achat</th>
@@ -658,6 +461,7 @@ export const CodesManagement: React.FC<CodesManagementProps> = ({ user }) => {
                               <td className="px-3 py-2">{item.code}</td>
                               <td className="px-3 py-2">{item.type === '1-month' ? '1 mois' : '3 mois'}</td>
                               <td className="px-3 py-2">{item.platform}</td>
+                              <td className="px-3 py-2">{item.denomination.toLocaleString()} Ar</td>
                               <td className="px-3 py-2">{item.purchasePrice.toLocaleString()} Ar</td>
                               <td className="px-3 py-2">{item.salePrice.toLocaleString()} Ar</td>
                               <td className="px-3 py-2">{item.purchaseDate}</td>
@@ -696,7 +500,7 @@ export const CodesManagement: React.FC<CodesManagementProps> = ({ user }) => {
                   ) : (
                     <>
                       <Upload className="h-4 w-4" />
-                      <span>Importer par lot ({importPreview.length} codes)</span>
+                      <span>Importer {importPreview.length} codes</span>
                     </>
                   )}
                 </button>
@@ -708,7 +512,7 @@ export const CodesManagement: React.FC<CodesManagementProps> = ({ user }) => {
 
       {/* Filtres et recherche */}
       <div className="bg-white rounded-xl shadow-sm border p-6">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
             <input
@@ -742,17 +546,6 @@ export const CodesManagement: React.FC<CodesManagementProps> = ({ user }) => {
             ))}
           </select>
 
-          <select
-            value={platformFilter}
-            onChange={(e) => setPlatformFilter(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="all">Toutes les plateformes</option>
-            {platforms.map(platform => (
-              <option key={platform} value={platform}>{platform}</option>
-            ))}
-          </select>
-
           <div className="flex items-center space-x-2 text-sm text-gray-600">
             <Package className="h-4 w-4" />
             <span>{filteredCodes.length} codes</span>
@@ -777,7 +570,6 @@ export const CodesManagement: React.FC<CodesManagementProps> = ({ user }) => {
                   value={formData.code}
                   onChange={(e) => setFormData({ ...formData, code: e.target.value })}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Entrez un nouveau code"
                   required
                 />
               </div>
@@ -964,22 +756,26 @@ export const CodesManagement: React.FC<CodesManagementProps> = ({ user }) => {
                           Vendre
                         </button>
                       )}
-                      <button
-                        onClick={() => startEdit(code)}
-                        className="text-blue-600 hover:text-blue-900"
-                      >
-                        Modifier
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (confirm('Êtes-vous sûr de vouloir supprimer ce code ?')) {
-                            deleteCode(code.id);
-                          }
-                        }}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        Supprimer
-                      </button>
+                      {user.role === 'admin' && (
+                        <>
+                          <button
+                            onClick={() => startEdit(code)}
+                            className="text-blue-600 hover:text-blue-900"
+                          >
+                            <Edit3 className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm('Êtes-vous sûr de vouloir supprimer ce code ?')) {
+                                deleteCode(code.id);
+                              }
+                            }}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
